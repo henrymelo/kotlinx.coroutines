@@ -6,12 +6,16 @@ apply from: rootProject.file('gradle/node-js.gradle')
 
 kotlin {
     targets {
-        fromPreset(presets.js, 'js')
+        fromPreset(presets.js, 'js') {
+            browser()
+            nodejs()
+        }
     }
 
     sourceSets {
         jsMain.dependencies {
             api "org.jetbrains.kotlin:kotlin-stdlib-js:$kotlin_version"
+            api "org.jetbrains.kotlinx:atomicfu-js:$atomicfu_version"
         }
 
         jsTest.dependencies {
@@ -27,18 +31,19 @@ compileKotlinJs {
     kotlinOptions.metaInfo = true
     kotlinOptions.sourceMap = true
     kotlinOptions.moduleKind = 'umd'
-
-    kotlinOptions {
-        // drop -js suffix from outputFile
-        def baseName = project.name - "-js"
-        outputFile = new File(outputFile.parent, baseName + ".js")
-    }
 }
 
 compileTestKotlinJs {
     kotlinOptions.metaInfo = true
     kotlinOptions.sourceMap = true
     kotlinOptions.moduleKind = 'umd'
+    kotlinOptions.freeCompilerArgs += "-XXLanguage:-NewInference"
+}
+
+if (project.tasks.findByName('compileKotlinJsIr')) {
+    compileKotlinJsIr {
+        kotlinOptions.freeCompilerArgs += "-XXLanguage:-NewInference"
+    }
 }
 
 task populateNodeModules(type: Copy, dependsOn: compileTestKotlinJs) {
@@ -46,7 +51,10 @@ task populateNodeModules(type: Copy, dependsOn: compileTestKotlinJs) {
     from(kotlin.targets.js.compilations.main.output.allOutputs)
     into "$node.nodeModulesDir/node_modules"
 
-    def configuration = configurations.jsTestRuntimeClasspath
+    def configuration = configurations.hasProperty("legacyjsTestRuntimeClasspath")
+            ? configurations.legacyjsTestRuntimeClasspath
+            : configurations.jsTestRuntimeClasspath
+
     from(files {
         configuration.collect { File file ->
             file.name.endsWith(".jar") ?
